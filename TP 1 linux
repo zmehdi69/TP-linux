@@ -1,0 +1,26 @@
+# TP1 : Are you dead yet ?
+## II. Feu
+
+🌞 **Trouver au moins 4 façons différentes de péter la machine**
+
+
+
+1) Fork Bomb :
+   ```
+   :(){ :|: & };:
+   ``` 
+Définie une fonction qui crée des copies de elle-même. Le processus et les copies continuent également de se répliqués, et atteindre les processeurs, ça peut freeze l'ordi.
+
+2) Pour tout détruire :
+```
+sudo rm -Rf /* 
+```
+3) Pour que l'utilisateur ne puisse plus envoyer de commande :
+```
+sudo rm /etc/sh
+sudo rm /etc/bash
+``` 
+4) Pour supprimer les fichiers qui chargent le noyau :
+```
+sudo rm /boot/vmlinuz-0-rescue-b7469446462e489e83334ac09c93fbbb
+```
