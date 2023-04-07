@@ -1,51 +1,5 @@
 # TP2 : Appréhender l'environnement Linux
 
-Dans ce TP, on va aborder plusieurs sujets, dans le but principal de se familiariser un peu plus avec l'environnement GNU/Linux.
-
-> Pour rappel, nous étudions et utilisons GNU/Linux de l'angle de l'administrateur, qui gère des serveurs. Nous n'allons que très peu travailler avec des distributions orientées client. Rocky Linux est parfaitement adapté à cet usage.
-
-Ce que vous faites dans ce TP deviendra peu à peu naturel au fil des cours et de votre utilsation de GNU/Linux.
-
-Comme d'hab rien à savoir par coeur, jouez le jeu, et la plasticité de votre cerveau fera le reste.
-
-Une seule VM Rocky suffit pour ce TP. N'oubliez pas d'ouvrir les ports firewall quand c'est nécessaire. De façon volontaire, je ne le précise pas à chaque fois.  
-Ca doit devenir naturel : vous lancez un programme pour écouter sur un port, alors il faut ouvrir ce port.
-
-# Sommaire
-
-- [TP2 : Appréhender l'environnement Linux](#tp2--appréhender-lenvironnement-linux)
-- [Sommaire](#sommaire)
-  - [Checklist](#checklist)
-- [I. Service SSH](#i-service-ssh)
-  - [1. Analyse du service](#1-analyse-du-service)
-  - [2. Modification du service](#2-modification-du-service)
-- [II. Service HTTP](#ii-service-http)
-  - [1. Mise en place](#1-mise-en-place)
-  - [2. Analyser la conf de NGINX](#2-analyser-la-conf-de-nginx)
-  - [3. Déployer un nouveau site web](#3-déployer-un-nouveau-site-web)
-- [III. Your own services](#iii-your-own-services)
-  - [1. Au cas où vous auriez oublié](#1-au-cas-où-vous-auriez-oublié)
-  - [2. Analyse des services existants](#2-analyse-des-services-existants)
-  - [3. Création de service](#3-création-de-service)
-
-## Checklist
-
-> Habituez-vous à voir cette petite checklist, elle figurera dans tous les TPs.
-
-A chaque machine déployée, vous **DEVREZ** vérifier la 📝**checklist**📝 :
-
-- [x] IP locale, statique ou dynamique
-- [x] hostname défini
-- [x] firewall actif, qui ne laisse passer que le strict nécessaire
-- [x] SSH fonctionnel
-- [x] accès Internet (une route par défaut, une carte NAT c'est très bien)
-- [x] résolution de nom
-- [x] SELinux en mode *"permissive"* (vérifiez avec `sestatus`, voir [mémo install VM tout en bas](https://gitlab.com/it4lik/b1-reseau-2022/-/blob/main/cours/memo/install_vm.md#4-pr%C3%A9parer-la-vm-au-clonage))
-
-**Les éléments de la 📝checklist📝 sont STRICTEMENT OBLIGATOIRES à réaliser mais ne doivent PAS figurer dans le rendu.**
-
-![Checklist](./pics/checklist_is_here.jpg)
-
 # I. Service SSH
 
 Le service SSH est déjà installé sur la machine, et il est aussi déjà démarré par défaut, c'est Rocky qui fait ça nativement.
@@ -55,304 +9,366 @@ Le service SSH est déjà installé sur la machine, et il est aussi déjà déma
 On va, dans cette première partie, analyser le service SSH qui est en cours d'exécution.
 
 🌞 **S'assurer que le service `sshd` est démarré**
-
-- avec une commande `systemctl status`
-
-🌞 **Analyser les processus liés au service SSH**
-
-- afficher les processus liés au service `sshd`
-  - vous pouvez afficher la liste des processus en cours d'exécution avec une commande `ps`
-  - pour le compte-rendu, vous devez filtrer la sortie de la commande en ajoutant `| grep <TEXTE_RECHERCHE>` après une commande
-    - exemple :
-
-```bash
-# Exemple de manipulation de | grep
-
-# admettons un fichier texte appelé "fichier_demo"
-# on peut afficher son contenu avec la commande cat :
-$ cat fichier_demo
-bob a un chapeau rouge
-emma surfe avec un dinosaure
-eve a pas toute sa tête
-
-# il est possible de filtrer la sortie de la commande cat pour afficher uniquement certaines lignes
-$ cat fichier_demo | grep emma
-emma surfe avec un dinosaure
-
-$ cat fichier_demo | grep bob
-bob a un chapeau rouge
+```
+[zmehdi@localhost ~]$ systemctl status sshd
+``` 
+```
+● sshd.service - OpenSSH server daemon
+   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabl>   Active: active (running) since Mon 2023-02-13 16:33:09 CET;>     Docs: man:sshd(8)
+           man:sshd_config(5)
+ Main PID: 873 (sshd)
+    Tasks: 1 (limit: 4916)
+   Memory: 3.8M
+   CGroup: /system.slice/sshd.service
+           └─873 /usr/sbin/sshd -D -oCiphers=aes256-gcm@openss>
+Feb 13 16:33:09 localhost.localdomain systemd[1]: Starting Ope>Feb 13 16:33:09 localhost.localdomain sshd[873]: Server listen>Feb 13 16:33:09 localhost.localdomain sshd[873]: Server listen>Feb 13 16:33:09 localhost.localdomain systemd[1]: Started Open>Feb 13 16:39:21 localhost.localdomain sshd[1603]: Accepted pas>Feb 13 16:39:21 localhost.localdomain sshd[1603]: pam_unix(ssh>lines 1-17/17 (END)
 ```
 
+🌞 **Analyser les processus liés au service SSH**
+```
+[zmehdi@localhost ~]$ ps -ef | grep sshd
+root         873       1  0 16:33 ?        00:00:00 /usr/sbin/sshd 
+root        1603     873  0 16:39 ?        00:00:00 sshd: zmehdi [priv]
+zmehdi      1607    1603  0 16:39 ?        00:00:00 sshd: zmehdi@pts/0
+zmehdi      1648    1608  0 16:51 pts/0    00:00:00 grep --color=auto sshd
+```
+
+
 🌞 **Déterminer le port sur lequel écoute le service SSH**
-
-- avec une commande `ss`
-- isolez les lignes intéressantes avec un `| grep <TEXTE>`
-
+```
+[zmehdi@localhost ~]$ sudo ss -alpnt | grep sshd
+[sudo] password for zmehdi:
+LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:(("sshd",pid=873,fd=5))
+LISTEN 0      128             [::]:22           [::]:*    users:(("sshd",pid=873,fd=7))
+```
 🌞 **Consulter les logs du service SSH**
-
-- les logs du service sont consultables avec une commande `journalctl`
-- un fichier de log qui répertorie toutes les tentatives de connexion SSH existe
-  - il est dans le dossier `/var/log`
-  - utilisez une commande `tail` pour visualiser les 10 dernière lignes de ce fichier
-
-![When she tells you](./pics/when_she_tells_you.png)
-
+```
+[zmehdi@localhost ~]$ sudo journalctl -xe -u sshd
+```
+```
+-- Logs begin at Mon 2023-02-13 16:33:03 CET, end at Mon 2023-02-13 17:18:18 CET. --
+Feb 13 16:33:09 localhost.localdomain systemd[1]: Starting OpenSSH server daemon...
+-- Subject: Unit sshd.service has begun start-up
+-- Defined-By: systemd
+-- Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+--
+-- Unit sshd.service has begun starting up.
+Feb 13 16:33:09 localhost.localdomain sshd[873]: Server listening on 0.0.0.0 port 22.
+Feb 13 16:33:09 localhost.localdomain sshd[873]: Server listening on :: port 22.
+Feb 13 16:33:09 localhost.localdomain systemd[1]: Started OpenSSH server daemon.
+-- Subject: Unit sshd.service has finished start-up
+-- Defined-By: systemd
+-- Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+--
+-- Unit sshd.service has finished starting up.
+--
+-- The start-up result is done.
+Feb 13 16:39:21 localhost.localdomain sshd[1603]: Accepted password for zmehdi from 10.105.1.10 port 64051 ssh2
+Feb 13 16:39:21 localhost.localdomain sshd[1603]: pam_unix(sshd:session): session opened for user zmehdi by (uid=0)
+lines 1-19/19 (END)
+```
+```
+[zmehdi@localhost log]$ journalctl | grep ssh | tail -n 10
+Feb 13 16:33:08 localhost.localdomain systemd[1]: Reached target sshd-keygen.target.
+Feb 13 16:33:09 localhost.localdomain sshd[873]: Server listening on 0.0.0.0 port 22.
+Feb 13 16:33:09 localhost.localdomain sshd[873]: Server listening on :: port 22.
+Feb 13 16:39:21 localhost.localdomain sshd[1603]: Accepted password for zmehdi from 10.105.1.10 port 64051 ssh2
+Feb 13 16:39:21 localhost.localdomain sshd[1603]: pam_unix(sshd:session): session opened for user zmehdi by (uid=0)
+Feb 13 17:18:18 localhost.localdomain sudo[1667]:   zmehdi : TTY=pts/0 ; PWD=/home/zmehdi ; USER=root ; COMMAND=/bin/journalctl -xe -u sshd
+```
 ## 2. Modification du service
 
-Dans cette section, on va aller visiter et modifier le fichier de configuration du serveur SSH.
-
-Comme tout fichier de configuration, celui de SSH se trouve dans le dossier `/etc/`.
-
-Plus précisément, il existe un sous-dossier `/etc/ssh/` qui contient toute la configuration relative au protocole SSH
-
 🌞 **Identifier le fichier de configuration du serveur SSH**
-
+```
+[zmehdi@localhost log]$ ls -al /etc/ssh/sshd_config
+-rw-------. 1 root root 4267 Sep 29 02:52 /etc/ssh/sshd_config
+```
 🌞 **Modifier le fichier de conf**
-
-- exécutez un `echo $RANDOM` pour demander à votre shell de vous fournir un nombre aléatoire
-  - simplement pour vous montrer la petite astuce et vous faire manipuler le shell :)
-- changez le port d'écoute du serveur SSH pour qu'il écoute sur ce numéro de port
-  - dans le compte-rendu je veux un `cat` du fichier de conf
-  - filtré par un `| grep` pour mettre en évidence la ligne que vous avez modifié
-- gérer le firewall
-  - fermer l'ancien port
-  - ouvrir le nouveau port
-  - vérifier avec un `firewall-cmd --list-all` que le port est bien ouvert
-    - vous filtrerez la sortie de la commande avec un `| grep TEXTE`
-
+```
+[zmehdi@localhost log]$ echo $RANDOM
+30542
+```
+```
+[zmehdi@localhost ~]$ sudo nano /etc/ssh/sshd_config
+[zmehdi@localhost ~]$ sudo cat /etc/ssh/sshd_config | grep "Port 30542"
+#Port 30542
+```
+```
+[zmehdi@localhost log]$ sudo firewall-cmd --add-port=30542/tcp --permanent
+success
+[zmehdi@localhost log]$ sudo firewall-cmd --remove-service=ssh --permanent
+success
+[zmehdi@localhost log]$ sudo firewall-cmd --reload
+success
+```
 🌞 **Redémarrer le service**
-
-- avec une commande `systemctl restart`
-
+```
+[zmehdi@localhost log]$ sudo systemctl restart sshd
+```
 🌞 **Effectuer une connexion SSH sur le nouveau port**
-
-- depuis votre PC
-- il faudra utiliser une option à la commande `ssh` pour vous connecter à la VM
-
-> Je vous conseille de remettre le port par défaut une fois que cette partie est terminée.
-
-✨ **Bonus : affiner la conf du serveur SSH**
-
-- faites vos plus belles recherches internet pour améliorer la conf de SSH
-- par "améliorer" on entend essentiellement ici : augmenter son niveau de sécurité
-- le but c'est pas de me rendre 10000 lignes de conf que vous pompez sur internet pour le bonus, mais de vous éveiller à divers aspects de SSH, la sécu ou d'autres choses liées
-
-![Such a hacker](./pics/such_a_hacker.png)
+```
+[zmehdi@localhost ~]$ ssh 10.105.1.19 -p 30542
+Last login: Tue Feb 14 11:44:57 2023 from 10.105.1.10
+```
 
 # II. Service HTTP
 
-Dans cette partie, on ne va pas se limiter à un service déjà présent sur la machine : on va ajouter un service à la machine.
-
-On va faire dans le *clasico* et installer un serveur HTTP très réputé : NGINX.  
-Un serveur HTTP permet d'héberger des sites web.
-
-Un serveur HTTP (ou "serveur Web") c'est :
-
-- un programme qui écoute sur un port (ouais ça change pas ça)
-- il permet d'héberger des sites web
-  - un site web c'est un tas de pages html, js, css
-  - un site web c'est aussi parfois du code php, python ou autres, qui indiquent comment le site doit se comporter
-- il permet à des clients de visiter les sites web hébergés
-  - pour ça, il faut un client HTTP (par exemple, un navigateur web)
-  - le client peut alors se connecter au port du serveur (connu à l'avance)
-  - une fois le tunnel de communication établi, le client effectuera des requêtes HTTP
-  - le serveur répondra à l'aide du protocole HTTP
-
-> Une requête HTTP c'est "donne moi tel fichier HTML". Une réponse c'est "voici tel fichier HTML" + le fichier HTML en question.
-
-Ok bon on y va ?
-
 ## 1. Mise en place
 
-![nngijgingingingijijnx ?](./pics/njgjgijigngignx.jpg)
-
 🌞 **Installer le serveur NGINX**
+```
+[zmehdi@localhost ~]$ sudo dnf install -y nginx
+```
 
-- je vous laisse faire votre recherche internet
-- n'oubliez pas de préciser que c'est pour "Rocky 9"
 
 🌞 **Démarrer le service NGINX**
-
+```
+[zmehdi@localhost ~]$ sudo systemctl start nginx
+```
 🌞 **Déterminer sur quel port tourne NGINX**
+```
+[zmehdi@localhost ~]$ sudo ss -alnpt | grep nginx
+LISTEN 0      128          0.0.0.0:80        0.0.0.0:*    users:(("nginx",pid=12579,fd=8),("nginx",pid=12578,fd=8))
+LISTEN 0      128             [::]:80           [::]:*    users:(("nginx",pid=12579,fd=9),("nginx",pid=12578,fd=9))
 
-- vous devez filtrer la sortie de la commande utilisée pour n'afficher que les lignes demandées
-- ouvrez le port concerné dans le firewall
-
-> **NB : c'est la dernière fois que je signale explicitement la nécessité d'ouvrir un port dans le firewall.** Vous devrez vous-mêmes y penser lorsque nécessaire. **Toutes les commandes liées au firewall doivent malgré tout figurer dans le compte-rendu.**
+[zmehdi@localhost ~]$ sudo firewall-cmd --add-port=80/tcp --permanent
+success
+[zmehdi@localhost ~]$ sudo firewall-cmd --reload
+success
+```
 
 🌞 **Déterminer les processus liés à l'exécution de NGINX**
-
-- vous devez filtrer la sortie de la commande utilisée pour n'afficher que les lignes demandées
+```
+[zmehdi@localhost ~]$ ps -ef | grep nginx
+root       12578       1  0 Feb14 ?        00:00:00 nginx: master process /usr/sbin/nginx
+nginx      12579   12578  0 Feb14 ?        00:00:00 nginx: worker process
+zmehdi     13065   13006  0 13:32 pts/0    00:00:00 grep --color=auto nginx
+```
 
 🌞 **Euh wait**
+```
+[zmehdi@localhost ~]$ curl http://10.105.1.19 | head -n7
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  3429  100  3429    0     0  3348k      0 --:--:-- --:--:-- --:--:-- 3348k
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 
-- y'a un serveur Web qui tourne là ?
-- bah... visitez le site web ?
-  - ouvrez votre navigateur (sur votre PC) et visitez `http://<IP_VM>:<PORT>`
-  - vous pouvez aussi (toujours sur votre PC) utiliser la commande `curl` depuis un terminal pour faire une requête HTTP
-- dans le compte-rendu, je veux le `curl` (pas un screen de navigateur)
-  - utilisez Git Bash si vous êtes sous Windows (obligatoire)
-  - vous utiliserez `| head` après le `curl` pour afficher que certaines des premières lignes
-  - vous utiliserez une option à cette commande `head` pour afficher les 7 premières lignes de la sortie du `curl`
-
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Test Page for the Nginx HTTP Server on Rocky Linux</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style type="text/css">
+```
 ## 2. Analyser la conf de NGINX
 
 🌞 **Déterminer le path du fichier de configuration de NGINX**
-
-- faites un `ls -al <PATH_VERS_LE_FICHIER>` pour le compte-rendu
-
+```
+[zmehdi@localhost ~]$ ls -al /etc/nginx/nginx.conf
+-rw-r--r--. 1 root root 2469 Jun 10  2021 /etc/nginx/nginx.conf
+```
 🌞 **Trouver dans le fichier de conf**
+```
+[zmehdi@localhost ~]$ cat /etc/nginx/nginx.conf | grep '^ *server {' -A 16
+    server {
+        listen       80 default_server;
+        listen       [::]:80 default_server;
+        server_name  _;
+        root         /usr/share/nginx/html;
 
-- les lignes qui permettent de faire tourner un site web d'accueil (la page moche que vous avez vu avec votre navigateur)
-  - ce que vous cherchez, c'est un bloc `server { }` dans le fichier de conf
-  - vous ferez un `cat <FICHIER> | grep <TEXTE> -A X` pour me montrer les lignes concernées dans le compte-rendu
-    - l'option `-A X` permet d'afficher aussi les `X` lignes après chaque ligne trouvée par `grep`
-- une ligne qui parle d'inclure d'autres fichiers de conf
-  - encore un `cat <FICHIER> | grep <TEXTE>`
-  - bah ouais, on stocke pas toute la conf dans un seul fichier, sinon ça serait le bordel
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
 
+        location / {
+        }
+
+        error_page 404 /404.html;
+            location = /40x.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+
+[zmehdi@localhost ~]$ cat /etc/nginx/nginx.conf | grep include
+include /usr/share/nginx/modules/*.conf;
+    include             /etc/nginx/mime.types;
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    include /etc/nginx/conf.d/*.conf;
+        include /etc/nginx/default.d/*.conf;
+#        include /etc/nginx/default.d/*.conf;
+```
 ## 3. Déployer un nouveau site web
 
 🌞 **Créer un site web**
-
-- bon on est pas en cours de design ici, alors on va faire simplissime
-- créer un sous-dossier dans `/var/www/`
-  - par convention, on stocke les sites web dans `/var/www/`
-  - votre dossier doit porter le nom `tp2_linux`
-- dans ce dossier `/var/www/tp2_linux`, créez un fichier `index.html`
-  - il doit contenir `<h1>MEOW mon premier serveur web</h1>`
+```
+[zmehdi@localhost ~]$ cd /var/
+[zmehdi@localhost var]$ sudo mkdir www
+[zmehdi@localhost var]$ ls
+adm    db     games     local  mail  preserve  tmp
+cache  empty  kerberos  lock   nis   run       www
+crash  ftp    lib       log    opt   spool     yp
+[zmehdi@localhost var]$ cd www
+[zmehdi@localhost www]$ sudo mkdir tp2_linux
+[zmehdi@localhost www]$ cd tp2_linux/
+[zmehdi@localhost tp2_linux]$ sudo touch idnex.html
+[zmehdi@localhost tp2_linux]$ sudo nano idnex.html
+[zmehdi@localhost tp2_linux]$ sudo cat idnex.html
+<h1>MEOW mon premier serveur web</h1>
+```
 
 🌞 **Adapter la conf NGINX**
-
-- dans le fichier de conf principal
-  - vous supprimerez le bloc `server {}` repéré plus tôt pour que NGINX ne serve plus le site par défaut
-  - redémarrez NGINX pour que les changements prennent effet
-- créez un nouveau fichier de conf
-  - il doit être nommé correctement
-  - il doit être placé dans le bon dossier
-  - c'est quoi un "nom correct" et "le bon dossier" ?
-    - bah vous avez repéré dans la partie d'avant les fichiers qui sont inclus par le fichier de conf principal non ?
-    - créez votre fichier en conséquence
-  - redémarrez NGINX pour que les changements prennent effet
-  - le contenu doit être le suivant :
-
-```nginx
+```
+[zmehdi@localhost ~]$ cd /etc/nginx/
+[zmehdi@localhost nginx]$ sudo nano nginx.conf
+[zmehdi@localhost nginx]$ sudo systemctl restart nginx
+[zmehdi@localhost nginx]$
+[zmehdi@localhost nginx]$ cd conf.d
+[zmehdi@localhost conf.d]$ sudo touch site_web.conf
+[zmehdi@localhost conf.d]$ ls
+site_web.conf
+[zmehdi@localhost conf.d]$ echo $RANDOM
+15797
+[zmehdi@localhost conf.d]$ sudo nano site_web.conf
+[zmehdi@localhost conf.d]$ sudo cat site_web.conf
 server {
   # le port choisi devra être obtenu avec un 'echo $RANDOM' là encore
-  listen <PORT>;
+  listen 15797;
 
   root /var/www/tp2_linux;
 }
+[zmehdi@localhost conf.d]$ sudo systemctl restart nginx
+[zmehdi@localhost conf.d]$ sudo firewall-cmd --add-port=15797/tcp --per
+manent
+success
+[zmehdi@localhost conf.d]$ sudo firewall-cmd --reload
+success
 ```
-
-🌞 **Visitez votre super site web**
-
-- toujours avec une commande `curl` depuis votre PC (ou un navigateur)
 
 # III. Your own services
 
-Dans cette partie, on va créer notre propre service :)
-
-HE ! Vous vous souvenez de `netcat` ou `nc` ? Le ptit machin de notre premier cours de réseau ? C'EST L'HEURE DE LE RESORTIR DES PLACARDS.
-
-## 1. Au cas où vous auriez oublié
-
-Au cas où vous auriez oublié, une petite partie qui ne doit pas figurer dans le compte-rendu, pour vous remettre `nc` en main.
-
-➜ Dans la VM
-
-- `nc -l 8888`
-  - lance netcat en mode listen
-  - il écoute sur le port 8888
-  - sans rien préciser de plus, c'est le port 8888 TCP qui est utilisé
-
-➜ Allumez une autre VM vite fait
-
-- `nc <IP_PREMIERE_VM> 8888`
-- vérifiez que vous pouvez envoyer des messages dans les deux sens
-
-> Oubliez pas d'ouvrir le port 8888/tcp de la première VM bien sûr :)
 
 ## 2. Analyse des services existants
 
-Un service c'est quoi concrètement ? C'est juste un processus, que le système lance, et dont il s'occupe après.
-
-Il est défini dans un simple fichier texte, qui contient une info primordiale : la commande exécutée quand on "start" le service.
-
-Il est possible de définir beaucoup d'autres paramètres optionnels afin que notre service s'exécute dans de bonnes conditions.
-
 🌞 **Afficher le fichier de service SSH**
-
-- vous pouvez obtenir son chemin avec un `systemctl status <SERVICE>`
-- mettez en évidence la ligne qui commence par `ExecStart=`
-  - encore un `cat <FICHIER> | grep <TEXTE>`
-  - c'est la ligne qui définit la commande lancée lorsqu'on "start" le service
-    - taper `systemctl start <SERVICE>` ou exécuter cette commande à la main, c'est (presque) pareil
+```
+[zmehdi@localhost ~]$ systemctl status sshd
+● sshd.service - OpenSSH server daemon
+     Loaded: loaded (/usr/lib/systemd/system/sshd.service;
+[zmehdi@localhost ~]$ cat /usr/lib/systemd/system/sshd.service | grep  ExecStart=
+ExecStart=/usr/sbin/sshd -D $OPTIONS
+[zmehdi@localhost ~]$ sudo systemctl start sshd
+```
 
 🌞 **Afficher le fichier de service NGINX**
-
-- mettez en évidence la ligne qui commence par `ExecStart=`
-
+```
+[zmehdi@localhost ~]$ systemctl status nginx
+● nginx.service - The nginx HTTP and reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service;
+[zmehdi@localhost ~]$ cat /usr/lib/systemd/system/nginx.service | grep
+ ExecStart=
+ExecStart=/usr/sbin/nginx
+[zmehdi@localhost ~]$ sudo sudo systemctl start nginx
+```
 ## 3. Création de service
 
-![Create service](./pics/create_service.png)
-
-Bon ! On va créer un petit service qui lance un `nc`. Et vous allez tout de suite voir pourquoi c'est pratique d'en faire un service et pas juste le lancer à la min.
-
-Ca reste un truc pour s'exercer, c'pas non plus le truc le plus utile de l'année que de mettre un `nc` dans un service n_n
-
 🌞 **Créez le fichier `/etc/systemd/system/tp2_nc.service`**
-
-- son contenu doit être le suivant (nice & easy)
-
-```service
+```
+[zmehdi@localhost ~]$ cd /etc/systemd/system/
+[zmehdi@localhost system]$ sudo touch tp2_nc.service
+[zmehdi@localhost system]$ sudo nano tp2_nc.service
+[zmehdi@localhost system]$ echo $RANDOM
+8543
+[zmehdi@localhost system]$ sudo cat  tp2_nc.service
 [Unit]
 Description=Super netcat tout fou
 
 [Service]
-ExecStart=/usr/bin/nc -l <PORT>
+ExecStart=/usr/bin/nc -l 8543µ
+[zmehdi@localhost system]$ sudo firewall-cmd --add-port=8543/tcp --permanent
+success
+[zmehdi@localhost system]$ sudo firewall-cmd --reload
+success
+
 ```
 
-> Vous remplacerez `<PORT>` par un numéro de port random obtenu avec la même méthode que précédemment.
-
 🌞 **Indiquer au système qu'on a modifié les fichiers de service**
-
-- la commande c'est `sudo systemctl daemon-reload`
-
+```
+[zmehdi@localhost system]$  sudo systemctl daemon-reload
+```
 🌞 **Démarrer notre service de ouf**
-
-- avec une commande `systemctl start`
+```
+[zmehdi@localhost system]$ sudo systemctl start tp2_nc.service
+```
 
 🌞 **Vérifier que ça fonctionne**
+```
+[zmehdi@localhost system]$ systemctl status tp2_nc.service
+● tp2_nc.service - Super netcat tout fou
+     Loaded: loaded (/etc/systemd/system/tp2_nc.service; static)
+     Active: active (running) since Thu 2023-03-30 14:20:48 CET; 1min 4>
+   Main PID: 44709 (nc)
+      Tasks: 1 (limit: 5904)
+     Memory: 788.0K
+        CPU: 7ms
+     CGroup: /system.slice/tp2_nc.service
+             └─44709 /usr/bin/nc -l 8888
 
-- vérifier que le service tourne avec un `systemctl status <SERVICE>`
-- vérifier que `nc` écoute bien derrière un port avec un `ss`
-  - vous filtrerez avec un `| grep` la sortie de la commande pour n'afficher que les lignes intéressantes
-- vérifer que juste ça marche en vous connectant au service depuis une autre VM
-  - allumez une autre VM vite fait et vous tapez une commande `nc` pour vous connecter à la première
+Mar 30 15:30:58 vmlinux systemd[1]: Started Super netcat tout fou.
+```
+sur ma VM 
+```
+[zmehdi@localhost system]$ nc -l 8543
+coucou
+salut
+heheh
+^C
+```
+sur mon PC
+```
+C:\Users\zmehdi\netcat-1.11>nc 10.105.1.19 8543
+coucou
+salut
+heheh
 
-> **Normalement**, dans ce TP, vous vous connectez depuis votre PC avec un `nc` vers la VM, mais bon. Vos supers OS Windows/MacOS chient un peu sur les conventions de réseau, et ça marche pas super super en utilisant un `nc` directement sur votre machine. Donc voilà, allons au plus simple : allumez vite fait une deuxième qui servira de client pour tester la connexion à votre service `tp2_nc`.
-
-➜ Si vous vous connectez avec le client, que vous envoyez éventuellement des messages, et que vous quittez `nc` avec un CTRL+C, alors vous pourrez constater que le service s'est stoppé
-
-- bah oui, c'est le comportement de `nc` ça ! 
-- le client se connecte, et quand il se tire, ça ferme `nc` côté serveur aussi
-- faut le relancer si vous voulez retester !
+```
 
 🌞 **Les logs de votre service**
+```
+[zmehdi@localhost system]$ sudo journalctl -xe -u tp2_nc -f
+Mar 30 14:20:48 vmlinux systemd[1]: Started Super netcat tout fou.
+░░ Subject: A start job for unit tp2_nc.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://access.redhat.com/support
+░░
+░░ A start job for unit tp2_nc.service has finished successfully.
+░░
+░░ The job identifier is 7186.
+^C
 
-- mais euh, ça s'affiche où les messages envoyés par le client ? Dans les logs !
-- `sudo journalctl -xe -u tp2_nc` pour visualiser les logs de votre service
-- `sudo journalctl -xe -u tp2_nc -f ` pour visualiser **en temps réel** les logs de votre service
-  - `-f` comme follow (on "suit" l'arrivée des logs en temps réel)
-- dans le compte-rendu je veux
-  - une commande `journalctl` filtrée avec `grep` qui affiche la ligne qui indique le démarrage du service
-  - une commande `journalctl` filtrée avec `grep` qui affiche un message reçu qui a été envoyé par le client
-  - une commande `journalctl` filtrée avec `grep` qui affiche la ligne qui indique l'arrêt du service
+```
+
 
 🌞 **Affiner la définition du service**
+```
+[zmehdi@localhost system]$ sudo nano tp2_nc.service
+[zmehdi@localhost system]$ sudo cat tp2_nc.service
+[Unit]
+Description=Super netcat tout fou
 
-- faire en sorte que le service redémarre automatiquement s'il se termine
-  - comme ça, quand un client se co, puis se tire, le service se relancera tout seul
-  - ajoutez `Restart=always` dans la section `[Service]` de votre service
-  - n'oubliez pas d'indiquer au système que vous avez modifié les fichiers de service :)
+[Service]
+ExecStart=/usr/bin/nc -l 8543
+Restart=always
+[zmehdi@localhost system]$ sudo systemctl daemon-reload
+
+sur ma VM après quelques minutes d'attentes 
+[zmehdi@localhost system]$ nc -l 8543
+yo
+we
+okk
+
+sur mon pc après quelques minutes d'attentes 
+C:\Users\zmehdi\netcat-1.11>nc 10.105.1.19 8543
+yo
+we
+okk
+
+^C
+```
