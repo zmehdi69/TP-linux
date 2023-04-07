@@ -1,0 +1,376 @@
+# TP6 : Travail autour de la solution NextCloud
+# Module 1 : Reverse Proxy
+##  I. Setup
+###  On utilisera NGINX comme reverse proxy
+```
+[zmehdi@proxy ~]$ sudo dnf update
+[zmehdi@proxy ~]$ sudo dnf install nginx
+Complete!
+[zmehdi@proxy ~]$ sudo systemctl enable nginx
+Created symlink /etc/systemd/system/multi-user.target.wants/nginx.service → /usr/lib/systemd/system/nginx.service.
+[zmehdi@proxy ~]$ sudo systemctl start nginx
+[zmehdi@proxy ~]$ sudo ss -lantpu | grep nginx
+tcp   LISTEN 0      511             0.0.0.0:80        0.0.0.0:*     users:(("nginx",pid=44621,fd=6),("nginx",pid=44620,fd=6),("nginx",pid=44619,fd=6))
+tcp   LISTEN 0      511                [::]:80           [::]:*     users:(("nginx",pid=44621,fd=7),("nginx",pid=44620,fd=7),("nginx",pid=44619,fd=7))[zmehdi@proxy ~]$ sudo firewall-cmd --add-port=80/tcp --permanent
+success
+[zmehdi@proxy ~]$ sudo firewall-cmd --reload
+success
+[zmehdi@proxy ~]$ systemctl status nginx
+● nginx.service - The nginx HTTP and reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; ve>
+     Active: active (running) since Mon 2023-01-16 11:40:16 CET; 2min 3>
+   Main PID: 44619 (nginx)
+      Tasks: 3 (limit: 5904)
+     Memory: 2.8M
+        CPU: 43ms
+     CGroup: /system.slice/nginx.service
+             ├─44619 "nginx: master process /usr/sbin/nginx"
+             ├─44620 "nginx: worker process"
+             └─44621 "nginx: worker process"
+
+Jan 16 11:40:16 proxy systemd[1]: Starting The nginx HTTP and reverse p>
+Jan 16 11:40:16 proxy nginx[44617]: nginx: the configuration file /etc/>
+Jan 16 11:40:16 proxy nginx[44617]: nginx: configuration file /etc/ngin>
+Jan 16 11:40:16 proxy systemd[1]: Started The nginx HTTP and reverse pr>
+[zmehdi@proxy ~]$ ps -ef | grep nginx
+root       44619       1  0 11:40 ?        00:00:00 nginx: master process /usr/sbin/nginx
+nginx      44620   44619  0 11:40 ?        00:00:00 nginx: worker process
+nginx      44621   44619  0 11:40 ?        00:00:00 nginx: worker process
+zmehdi   44710    1117  0 11:50 pts/0    00:00:00 grep --color=auto nginx
+zmehdi@LAPTOP-GEJ2DKFJ MINGW64 ~
+$ curl 10.105.1.13:80
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0<!doctype html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <title>HTTP Server Test Page powered by: Rocky Linux</title>
+    <style type="text/css">
+      /*<![CDATA[*/
+
+      html {
+
+```
+
+### Configurer NGINX
+```
+[zmehdi@proxy nginx]$ sudo cat nginx.conf | grep include
+include /usr/share/nginx/modules/*.conf;
+    include             /etc/nginx/mime.types;
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    include /etc/nginx/conf.d/*.conf;
+        include /etc/nginx/default.d/*.conf;
+[zmehdi@proxy nginx]$ cd default.d/
+[zmehdi@proxy default.d]$ sudo nano index.conf
+[zmehdi@proxy default.d]$ sudo cat index.conf
+server {
+    # On indique le nom que client va saisir pour accéder au service
+    # Pas d'erreur ici, c'est bien le nom de web, et pas de proxy qu'on veut ici !
+    server_name www.nextcloud.tp6;
+
+    # Port d'écoute de NGINX
+    listen 80;
+
+    location / {
+        # On définit des headers HTTP pour que le proxying se passe bien
+        proxy_set_header  Host $host;
+        proxy_set_header  X-Real-IP $remote_addr;
+        proxy_set_header  X-Forwarded-Proto https;
+        proxy_set_header  X-Forwarded-Host $remote_addr;
+        proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # On définit la cible du proxying
+        proxy_pass http://10.105.1.11:80;
+    }
+
+    # Deux sections location recommandés par la doc NextCloud
+    location /.well-known/carddav {
+      return 301 $scheme://$host/remote.php/dav;
+    }
+
+    location /.well-known/caldav {
+      return 301 $scheme://$host/remote.php/dav;
+    }
+}
+[zmehdi@proxy default.d]$ sudo systemctl enable nginx
+[zmehdi@proxy default.d]$ sudo systemctl start nginx
+
+```
+```
+[zmehdi@web config]$ sudo cat config.php  | head -10
+<?php
+$CONFIG = array (
+  'instanceid' => 'oc95qud4g84m',
+  'passwordsalt' => 'tJYJOVx7UtBCc5KlaM9GMWlbZcQiKh',
+  'secret' => 'DRkznGKS/330FsZXiW6uXK6nErfIua50pLojjnHoNcbbk9O4',
+  'trusted_domains' =>
+  array (
+    0 => 'web.tp5.linux',
+    1 => 'www.nextcloud.tp6',
+  ),
+```
+### Faites en sorte de
+
+```
+[zmehdi@web ~]$ sudo firewall-cmd --zone=public --add-rich-rule='rule family="ipv4" source address="10.105.1.13" invert="True" drop' --permanent
+[sudo] password for zmehdi:
+success
+```
+
+
+### Une fois que c'est en place
+
+```
+PS C:\Users\zmehdi> ping 10.105.1.13
+
+Envoi d’une requête 'Ping'  10.105.1.13 avec 32 octets de données :
+Réponse de 10.105.1.13 : octets=32 temps<1ms TTL=64
+Réponse de 10.105.1.13 : octets=32 temps<1ms TTL=64
+
+Statistiques Ping pour 10.105.1.13:
+    Paquets : envoyés = 2, reçus = 2, perdus = 0 (perte 0%),
+Durée approximative des boucles en millisecondes :
+    Minimum = 0ms, Maximum = 0ms, Moyenne = 0ms
+Ctrl+C
+PS C:\Users\zmehdi>  ping 10.105.1.11
+
+Envoi d’une requête 'Ping'  10.105.1.11 avec 32 octets de données :
+Réponse de 10.105.1.11 : octets=32 temps<1ms TTL=64
+Réponse de 10.105.1.11 : octets=32 temps<1ms TTL=64
+Réponse de 10.105.1.11 : octets=32 temps<1ms TTL=64
+Réponse de 10.105.1.11 : octets=32 temps<1ms TTL=64
+
+Statistiques Ping pour 10.105.1.11:
+    Paquets : envoyés = 4, reçus = 4, perdus = 0 (perte 0%),
+Durée approximative des boucles en millisecondes :
+    Minimum = 0ms, Maximum = 0ms, Moyenne = 0ms
+```
+# II. HTTPS
+```
+
+```
+# Module 2 : Sauvegarde du système de fichiers
+## I. Script de backup
+###  Ecrire le script bash
+```
+[zmehdi@web srv]$ sudo dnf install rsync
+[zmehdi@web srv]$ sudo dnf install zip
+[zmehdi@web srv]$ sudo mkdir backup
+[zmehdi@web srv]$ sudo useradd backup -d /srv/backup/ -s /usr/bin/nologin -u 1999
+[zmehdi@web srv]$ ls -l
+total 4
+drwxr-xr-x. 2 backup root  43 Jan 17 20:08 backup
+-rw-r--r--. 1 root   root 579 Jan 17 20:09 tp6_backup.sh
+[zmehdi@web srv]$ sudo cat tp6_backup.sh 
+#!/bin/bash
+
+#Script written in February 2023 by zmehdi
+#It was created to save the main nextcloud files and database. 
+
+backup_directory=/srv/backup/nextcloud-dirbkp_`date +"%Y%m%d"`
+
+
+#Backup files
+rsync -Aavx /var/www/tp5_nextcloud/ $backup_directory/
+
+#Backup database
+mysqldump --skip-column-statistics --single-transaction --default-character-set=utf8mb4 -h 172.16.72.12 -u nextcloud -ppewpewpew nextcloud > $backup_directory/nextcloud-sqlbkp_`date +"%Y%m%d"`.bak
+
+#Zip folder
+zip -r $backup_directory.zip $backup_directory
+
+#Remove folder
+rm -rf $backup_directory
+
+```
+## 3. Service et timer
+###  Créez un service
+```
+[zmehdi@web system]$ sudo cat backup.service 
+[Unit]
+Description=Backup service
+
+[Service]
+ExecStart=sh /srv/tp6_backup.sh
+User=backup
+Type=oneshot
+[zmehdi@web system]$ sudo systemctl status backup.service 
+○ backup.service - Backup service
+     Loaded: loaded (/etc/systemd/system/backup.service; static)
+     Active: inactive (dead)
+
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Search/LocalUsers.php
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Search/UnifiedSearchProvider.php
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Search/UnifiedSearchResult.php
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Service/
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Service/CircleService.php
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Service/CirclesService.php
+Mar 26 22:30:15 web.linux.tp5 sh[1821]: apps/circles/lib/Service/ConfigService.php
+Mar 26 22:30:26 web.linux.tp5 systemd[1]: backup.service: Deactivated successfully.
+Mar 26 22:30:26 web.linux.tp5 systemd[1]: Finished Backup service.
+Mar 26 22:30:26 web.linux.tp5 systemd[1]: backup.service: Consumed 13.510s CPU time.
+```
+
+
+# Module 3 : Fail2Ban
+## Faites en sorte que 
+```
+[zmehdi@db fail2ban]$ sudo cat jail.local | grep maxretry
+# A host is banned if it has generated "maxretry" during the last "findtime"
+# "maxretry" is the number of failures before a host get banned.
+maxretry = 3
+[zmehdi@db fail2ban]$ sudo cat jail.local | grep findtime
+# A host is banned if it has generated "maxretry" during the last "findtime"
+findtime  = 1m
+```
+```
+PS C:\Users\zmehdi> ssh zmehdi@10.105.1.12
+ssh: connect to host 10.105.1.12 port 22: Connection timed out
+```
+```
+[zmehdi@db ~]$ sudo fail2ban-client banned
+[{'sshd': ['10.105.1.11']}]
+``` 
+```
+[zmehdi@db ~]$ sudo fail2ban-client status sshd
+Status for the jail: sshd
+|- Filter
+|  |- Currently failed: 0
+|  |- Total failed:     6
+|  `- Journal matches:  _SYSTEMD_UNIT=sshd.service + _COMM=sshd
+`- Actions
+   |- Currently banned: 1
+   |- Total banned:     2
+   `- Banned IP list:   10.105.1.11
+```
+```
+[zmehdi@db ~]$ sudo fail2ban-client set sshd unbanip 10.105.1.11
+1
+``` 
+
+# Module 4 : Monitoring
+
+### Installer Netdata
+```
+[zmehdi@db ~]$ sudo dnf install epel-release -y
+Complete!
+[zmehdi@db ~]$ sudo dnf install -y netdata
+Complete!
+[zmehdi@db ~]$ ss -alnp | grep netdata
+u_str LISTEN 0      4096                             /tmp/netdata-ipc 36123                  * 0
+[zmehdi@db ~]$ ss -lant | grep 4096
+LISTEN 0      4096         0.0.0.0:19999      0.0.0.0:*
+LISTEN 0      4096       127.0.0.1:8125       0.0.0.0:*
+LISTEN 0      4096       127.0.0.1:19999      0.0.0.0:*
+LISTEN 0      4096           [::1]:8125          [::]:*
+LISTEN 0      4096           [::1]:19999         [::]:*
+-bash: LISTEN: command not found
+[zmehdi@db ~]$ sudo firewall-cmd --add-port=19999/tcp --permanent
+success
+[zmehdi@db ~]$ sudo firewall-cmd --reloa
+success
+[zmehdi@db ~]$ sudo systemctl restart netdata
+```
+```
+[zmehdi@web ~]$ sudo dnf install epel-release -y
+Complete!
+[zmehdi@web ~]$ sudo dnf install -y netdata
+Complete!
+[zmehdi@web ~]$  ss -alnp | grep netdata
+u_str LISTEN 0      4096                             /tmp/netdata-ipc 32393                  * 0
+[zmehdi@web ~]$ ss -lant | grep 4096
+LISTEN    0      4096       127.0.0.1:8125          0.0.0.0:*
+LISTEN    0      4096       127.0.0.1:19999         0.0.0.0:*
+LISTEN    0      4096           [::1]:8125             [::]:*
+LISTEN    0      4096           [::1]:19999            [::]:*
+[zmehdi@web ~]$ sudo firewall-cmd --add-port=19999/tcp --permanent
+success
+[zmehdi@web ~]$ sudo firewall-cmd --reload
+success
+[zmehdi@web ~]$ sudo systemctl restart netdata
+```
+
+### Une fois Netdata installé et fonctionnel, déterminer :
+
+```
+[zmehdi@web ~]$ ps -aux | grep netdata.p
+netdata    13587  2.3  8.2 487700 64820 ?        Ssl  21:28   0:01 /usr/sbin/netdata -P /run/netdata/netdata.pid -D
+netdata    13739  0.1  0.4   4504  3512 ?        S    21:28   0:00 /usr/bin/bash /usr/libexec/netdata/plugins.d/tc-qos-helper.sh 1
+netdata    13747  1.3  0.7 133636  5740 ?        Sl   21:28   0:00 /usr/libexec/netdata/plugins.d/apps.plugin 1
+zmehdi   13936  0.0  0.2   6416  2172 pts/0    S+   21:29   0:00 grep --color=auto netdata.p
+[zmehdi@web ~]$
+```
+```
+[zmehdi@web ~]$ sudo ss -lntup | grep netdata
+udp   UNCONN 0      0          127.0.0.1:8125       0.0.0.0:*    users:(("netdata",pid=13587,fd=63))
+udp   UNCONN 0      0              [::1]:8125          [::]:*    users:(("netdata",pid=13587,fd=62))
+tcp   LISTEN 0      4096       127.0.0.1:8125       0.0.0.0:*    users:(("netdata",pid=13587,fd=65))
+tcp   LISTEN 0      4096       127.0.0.1:19999      0.0.0.0:*    users:(("netdata",pid=13587,fd=7))
+tcp   LISTEN 0      4096           [::1]:8125          [::]:*    users:(("netdata",pid=13587,fd=64))
+tcp   LISTEN 0      4096           [::1]:19999         [::]:*    users:(("netdata",pid=13587,fd=6))
+
+```
+```
+[zmehdi@web ~]$  sudo cat /var/log/netdata/error.log | tail -10
+2023-01-22 21:28:09: python.d ERROR: uwsgi[localipv6] : Failed to connect to "::1", port 1717, error: [Errno 111] Connection refused
+2023-01-22 21:28:09: python.d INFO: plugin[main] : uwsgi[localipv6] : check failed
+2023-01-22 21:28:09: python.d ERROR: varnish[varnish] : can't locate 'varnishstat' binary or binary is not executable by user netdata
+2023-01-22 21:28:09: python.d INFO: plugin[main] : varnish[varnish] : check failed
+2023-01-22 21:28:09: python.d ERROR: w1sensor[w1sensor] : [Errno 2] No such file or directory: '/sys/bus/w1/devices/'
+2023-01-22 21:28:09: python.d INFO: plugin[main] : w1sensor[w1sensor] : check failed
+2023-01-22 21:28:09: python.d INFO: plugin[main] : no jobs to serve
+2023-01-22 21:28:09: python.d INFO: plugin[main] : exiting from main...
+2023-01-22 21:28:18: cgroup-name.sh: INFO: cgroup 'init.scope' is called 'init.scope'
+2023-01-22 21:30:07: alarm-notify.sh: WARNING: Cannot find file '/etc/netdata/health_alarm_notify.conf'.
+```
+
+### Configurer Netdata pour qu'il vous envoie des alertes dans un salon discord
+
+```
+[zmehdi@db netdata]$  sudo cat /etc/netdata/health_alarm_notify.conf
+###############################################################################
+# sending discord notifications
+
+# note: multiple recipients can be given like this:
+#                  "CHANNEL1 CHANNEL2 ..."
+
+# enable/disable sending discord notifications
+SEND_DISCORD="YES"
+
+# Create a webhook by following the official documentation -
+# https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks
+DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/1065194940486926376/1qS6MY4-RWJlT6UW_0j2XO_d0SCacO29HGgGJGErnBF8jIijFinzvDTjbcD4yVM4YUYW"
+
+# if a role's recipients are not configured, a notification will be send to
+# this discord channel (empty = do not send a notification for unconfigured
+# roles):
+DEFAULT_RECIPIENT_DISCORD="alarms"
+```
+
+### Vérifier que les alertes fonctionnent
+```
+[zmehdi@web ~]$ sudo dnf install stress
+[zmehdi@web netdata]$ sudo cat health.d/cpu.conf | head -n 10
+
+# you can disable an alarm notification by setting the 'to' line to: silent
+
+ template: 10min_cpu_usage
+       on: system.cpu
+    class: Utilization
+     type: System
+component: CPU
+       os: linux
+    hosts: *
+[zmehdi@web netdata]$ sudo cat health.d/cpu_usage.conf 
+alarm: cpu_usage
+on: system.cpu
+lookup : average -3s percentage foreach user,system
+units: %
+every: 10s
+warn: $this > 50
+crit: $this > 80
+[zmehdi@web netdata]$ sudo stress --cpu 8 --io 4 --vm 2 --vm-bytes 128M --timeout 10s
+
+```
